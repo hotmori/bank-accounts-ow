@@ -21,5 +21,12 @@ procedure deposit
               p_do_commit boolean default false,
               p_effective_time timestamp with local time zone default null );
 
+procedure transfer
+            ( p_src_accountid number,
+              p_trg_accountid number,
+              p_amount number,
+              p_commit boolean default false,
+              p_effective_time timestamp with local time zone default null );
+
 end;
 /

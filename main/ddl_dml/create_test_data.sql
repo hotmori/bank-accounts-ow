@@ -22,6 +22,7 @@ begin
   account_api.deposit(p_accountid => v_accountid, p_amount => 100, p_effective_time => to_timestamp('2017/11/09 07:30:00', 'YYYY/MM/DD HH:MI:SS'));
   account_api.deposit(p_accountid => v_accountid, p_amount => 100, p_effective_time => to_timestamp('2017/11/13 07:30:00', 'YYYY/MM/DD HH:MI:SS'));
 
+  commit;
 end;
 /
 

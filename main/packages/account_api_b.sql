@@ -150,11 +150,11 @@ begin
   v_result_balance := v_current_balance - p_amount;
 
   i_track_account_transaction ( p_accountid => p_accountid,
-                              p_transaction_type => AC_DEBIT,
-                              p_amount => p_amount,
-                              p_trg_accountid => p_trg_accountid,
-                              p_result_balance => v_result_balance,
-                              p_transaction_time => v_effective_time );
+                                p_transaction_type => AC_DEBIT,
+                                p_amount => p_amount,
+                                p_trg_accountid => p_trg_accountid,
+                                p_result_balance => v_result_balance,
+                                p_transaction_time => v_effective_time );
 
   i_adjust_balance ( p_accountid => p_accountid,
                      p_balance => v_result_balance );
@@ -183,11 +183,11 @@ begin
   v_result_balance := v_current_balance + p_amount;
 
   i_track_account_transaction ( p_accountid => p_accountid,
-                              p_transaction_type => AC_CREDIT,
-                              p_amount => p_amount,
-                              p_src_accountid => p_src_accountid,
-                              p_result_balance => v_result_balance,
-                              p_transaction_time => v_effective_time );
+                                p_transaction_type => AC_CREDIT,
+                                p_amount => p_amount,
+                                p_src_accountid => p_src_accountid,
+                                p_result_balance => v_result_balance,
+                                p_transaction_time => v_effective_time );
 
   i_adjust_balance ( p_accountid => p_accountid,
                      p_balance => v_result_balance );
@@ -201,27 +201,27 @@ procedure transfer
             ( p_src_accountid number,
               p_trg_accountid number,
               p_amount number,
-              p_commit boolean,
+              p_commit boolean default false,
               p_effective_time timestamp with local time zone default null )
 is
 
-  v_dummy number;
+  type number_t is table of number;
+  v_ids  number_t;
+
   v_effective_time timestamp with local time zone := nvl( p_effective_time, current_timestamp );
 
 begin
 
   i_assert_amount ( p_amount );
-  -- there is need to lock two accounts simult.
-  --   to avoid deadlock in case of opposit transfer at the same moment
-
-/*
-  select count(ac.accountid)
-    into v_dummy
+  -- there is need to lock two accounts simultaneously 
+  --    avoid deadlock in case of opposit transfer at the same moment
+  select ac.accountid
+    bulk collect into v_ids
     from accounts ac
    where ac.accountid in ( p_src_accountid, p_trg_accountid )
    order by ac.accountid
      for update of ac.accountid;
-*/
+
   withdraw ( p_accountid => p_src_accountid,
              p_amount => p_amount,
              p_lock_flg => false,
