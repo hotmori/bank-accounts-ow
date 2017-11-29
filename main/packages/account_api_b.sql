@@ -16,7 +16,7 @@ begin
 
   if p_lock_flg then
 
-    select balancex
+    select balance
       into v_balance
       from accounts ac
      where ac.accountid = p_accountid

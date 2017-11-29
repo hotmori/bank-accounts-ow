@@ -4,7 +4,6 @@ set echo on
 set timing on
 set serveroutput on
 set verify off
-set linesize 4000
 
 define v_instance = &&1
 define v_schema = &&2
@@ -26,8 +25,7 @@ alter session set current_schema = &&v_schema;
 
 /********************************/
 
-select * from user_errors;
---select * from all_errors where owner = upper('&&v_schema');
+select * from dba_errors where owner = upper('&&v_schema');
 
 spool off
 exit
