@@ -1,0 +1,2 @@
+create sequence account_transactions_seq
+/
