@@ -6,4 +6,3 @@ grant select any dictionary to &v_schema;
 grant create table to &v_schema;
 grant create sequence to &v_schema;
 grant create procedure to &v_schema;
-grant execute on dbms_lock to &v_schema;

@@ -56,15 +56,16 @@ begin
   end if;
 end i_commit;
 
-procedure i_track_account_transaction
-            ( p_accountid number,
-              p_transaction_type number,
-              p_amount number,
-              p_result_balance number,
-              p_transaction_time timestamp with local time zone,
-              p_src_accountid number default null,
-              p_trg_accountid number default null )
+function i_create_account_transaction
+           ( p_accountid number,
+             p_transaction_type varchar2,
+             p_amount number,
+             p_result_balance number,
+             p_transaction_time timestamp with local time zone,
+             p_src_transactionid number default null,
+             p_trg_transactionid number default null ) return number
 is
+  v_transactionid number := account_transactions_seq.nextval;
 begin
 
   insert into account_transactions
@@ -73,19 +74,21 @@ begin
                 transaction_type,
                 amount,
                 result_balance,
-                src_accountid,
-                trg_accountid,
+                src_transactionid,
+                trg_transactionid,
                 transaction_time )
-  values ( account_transactions_seq.nextval,
+  values ( v_transactionid,
            p_accountid,
            p_transaction_type,
            p_amount,
            p_result_balance,
-           p_src_accountid,
-           p_trg_accountid,
+           p_src_transactionid,
+           p_trg_transactionid,
            p_transaction_time );
 
-end i_track_account_transaction;
+  return v_transactionid;
+
+end i_create_account_transaction;
 
 procedure i_assert_amount ( p_amount number )
 is
@@ -102,6 +105,88 @@ begin
     raise_application_error (-20000, 'Invalid amount value.');
   end if;
 end i_assert_rate;
+
+-- @p_effective_time is used for test only purposes
+--    to generate test data in the past
+procedure i_withdraw
+            ( p_accountid number,
+              p_amount number,
+              p_trg_transactionid number,
+              p_lock_flg boolean,
+              p_do_commit boolean,
+              p_effective_time timestamp with local time zone,
+              pio_transactionid in out number )
+is
+  v_current_balance number;
+  v_result_balance number;
+  v_effective_time timestamp with local time zone := nvl( p_effective_time, current_timestamp );
+
+  v_transactionid number;
+begin
+
+  i_assert_amount ( p_amount );
+
+  v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
+
+  if p_amount > v_current_balance then
+    raise_application_error (-20000, 'Insufficient balance.');
+  end if;
+
+  v_result_balance := v_current_balance - p_amount;
+
+  v_transactionid := i_create_account_transaction
+                       ( p_accountid => p_accountid,
+                         p_transaction_type => AC_DEBIT,
+                         p_amount => p_amount,
+                         p_trg_transactionid => p_trg_transactionid,
+                         p_result_balance => v_result_balance,
+                         p_transaction_time => v_effective_time );
+
+  i_adjust_balance ( p_accountid => p_accountid,
+                     p_balance => v_result_balance );
+
+  i_commit ( p_do_commit );
+
+end i_withdraw;
+
+function i_deposit
+            ( p_accountid number,
+              p_amount number,
+              p_src_transactionid number,
+              p_lock_flg boolean,
+              p_do_commit boolean,
+              p_effective_time timestamp with local time zone )
+return number
+is
+  v_current_balance number;
+  v_result_balance number;
+  v_effective_time timestamp with local time zone := nvl( p_effective_time, current_timestamp );
+
+  v_transactionid number;
+begin
+
+  i_assert_amount ( p_amount );
+
+  v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
+
+  v_result_balance := v_current_balance + p_amount;
+
+  v_transactionid := i_create_account_transaction
+                       ( p_accountid => p_accountid,
+                         p_transaction_type => AC_CREDIT,
+                         p_amount => p_amount,
+                         p_src_transactionid => p_src_transactionid,
+                         p_result_balance => v_result_balance,
+                         p_transaction_time => v_effective_time );
+
+  i_adjust_balance ( p_accountid => p_accountid,
+                     p_balance => v_result_balance );
+
+  i_commit ( p_do_commit );
+
+  return v_transactionid;
+
+end i_deposit;
 
 function create_account
            ( p_accountid number,
@@ -124,78 +209,38 @@ exception when dup_val_on_index then
   raise_application_error (-20000, 'Account with this accountid already exists.');
 end create_account;
 
--- @p_effective_time is used for test only purposes
---    to generate test data in the past
 procedure withdraw
             ( p_accountid number,
               p_amount number,
-              p_trg_accountid number default null,
-              p_lock_flg boolean default true,
               p_do_commit boolean default false,
               p_effective_time timestamp with local time zone default null )
 is
-  v_current_balance number;
-  v_result_balance number;
-  v_effective_time timestamp with local time zone := nvl( p_effective_time, current_timestamp );
+  v_transactionid number;
 begin
-
-  i_assert_amount ( p_amount );
-
-  v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
-
-  if p_amount > v_current_balance then
-    raise_application_error (-20000, 'Insufficient balance.');
-  end if;
-
-  v_result_balance := v_current_balance - p_amount;
-
-  i_track_account_transaction ( p_accountid => p_accountid,
-                                p_transaction_type => AC_DEBIT,
-                                p_amount => p_amount,
-                                p_trg_accountid => p_trg_accountid,
-                                p_result_balance => v_result_balance,
-                                p_transaction_time => v_effective_time );
-
-  i_adjust_balance ( p_accountid => p_accountid,
-                     p_balance => v_result_balance );
-
-  i_commit ( p_do_commit );
-
+  v_transactionid := i_withdraw ( p_accountid => p_accountid,
+                                  p_amount => p_amount,
+                                  p_trg_transactionid => null,
+                                  p_lock_flg => true,
+                                  p_do_commit => p_do_commit,
+                                  p_effective_time => p_effective_time );
 end withdraw;
 
 procedure deposit
             ( p_accountid number,
               p_amount number,
-              p_src_accountid number default null,
               p_lock_flg boolean default true,
               p_do_commit boolean default false,
               p_effective_time timestamp with local time zone default null )
 is
-  v_current_balance number;
-  v_result_balance number;
-  v_effective_time timestamp with local time zone := nvl( p_effective_time, current_timestamp );
+  v_transactionid number;
 begin
-
-  i_assert_amount ( p_amount );
-
-  v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
-
-  v_result_balance := v_current_balance + p_amount;
-
-  i_track_account_transaction ( p_accountid => p_accountid,
-                                p_transaction_type => AC_CREDIT,
-                                p_amount => p_amount,
-                                p_src_accountid => p_src_accountid,
-                                p_result_balance => v_result_balance,
-                                p_transaction_time => v_effective_time );
-
-  i_adjust_balance ( p_accountid => p_accountid,
-                     p_balance => v_result_balance );
-
-  i_commit ( p_do_commit );
-
+  v_transactionid := i_deposit ( p_accountid => p_accountid,
+                                 p_amount => p_amount,
+                                 p_src_transactionid => null,
+                                 p_lock_flg => true,
+                                 p_do_commit => p_do_commit,
+                                 p_effective_time => p_effective_time );
 end deposit;
-
 
 procedure transfer
             ( p_src_accountid number,
@@ -209,11 +254,13 @@ is
   v_ids  number_t;
 
   v_effective_time timestamp with local time zone := nvl( p_effective_time, current_timestamp );
-
+   
+  v_src_transactionid number := account_transactions_seq.nextval;
+  v_trg_transactionid number := account_transactions_seq.nextval;
 begin
 
   i_assert_amount ( p_amount );
-  -- there is need to lock two accounts simultaneously 
+  -- there is need to lock two accounts simultaneously
   --    avoid deadlock in case of opposit transfer at the same moment
   select ac.accountid
     bulk collect into v_ids
@@ -222,11 +269,11 @@ begin
    order by ac.accountid
      for update of ac.accountid;
 
-  withdraw ( p_accountid => p_src_accountid,
-             p_amount => p_amount,
-             p_lock_flg => false,
-             p_do_commit => false,
-             p_effective_time => v_effective_time );  -- p_trg_accountid => p_trg_accountid
+  i_withdraw ( p_accountid => p_src_accountid,
+               p_amount => p_amount,
+               p_lock_flg => false,
+               p_do_commit => false,
+               p_effective_time => v_effective_time );  -- p_trg_accountid => p_trg_accountid
 
   deposit ( p_accountid => p_trg_accountid,
             p_amount => p_amount,

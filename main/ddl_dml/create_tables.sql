@@ -31,7 +31,7 @@ alter table accounts
 
 -- ==================== TABLE transaction_types ==================== --
 create table transaction_types
-               ( transaction_type number(1) not null,
+               ( transaction_type varchar2(16) not null,
                  description varchar2(32) not null)
 /
 comment on table transaction_types is 'Dictionary table.'
@@ -39,21 +39,17 @@ comment on table transaction_types is 'Dictionary table.'
 -----------------------------
 -- primary key and indexes --
 -----------------------------
-alter table transaction_types
-  add constraint transaction_types_st_pk primary key (transaction_type)
-  using index
+create unique index transaction_types_uk on transaction_types ( upper (transaction_type) )
 /
-
 -- ==================== TABLE account_transactions ==================== --
 create table account_transactions
                ( account_transactionid number not null,
                  accountid number not null,
-                 transaction_type number(1),
-                 amount number(10),
+                 transaction_type varchar2(16) not null,
+                 amount number,
                  result_balance number,
-                 src_accountid number,
-                 trg_accountid number,
-                 ref_transactionid number,
+                 src_transactionid number,
+                 trg_transactionid number,
                  transaction_time timestamp with local time zone not null
                )
 /
@@ -63,11 +59,9 @@ comment on column account_transactions.amount is 'Amount of that was involved in
 /
 comment on column account_transactions.result_balance is 'Result balance on account after the transaction.'
 /
-comment on column account_transactions.src_accountid is 'Source accountid if transaction was credit (transfer from another account).'
+comment on column account_transactions.src_transactionid is 'Source transactionid if transaction was credit (transfer from another account).'
 /
-comment on column account_transactions.trg_accountid is 'Target accountid if transaction was debit (transfer to another account).'
-/
-comment on column account_transactions.ref_transactionid is 'Rerence to parent transactionid for transfers. Not used for simplicity.'
+comment on column account_transactions.trg_transactionid is 'Target transactionid if transaction was debit (transfer to another account).'
 /
 -----------------------------
 -- primary key and indexes --
@@ -85,5 +79,20 @@ alter table account_transactions
   add constraint account_transaction_am_chk
   check ( amount > 0 )
 /
--- TODO
--- add checks for transfers
+
+alter table account_transactions
+  add constraint transaction_transfer_chk
+  check ( case when transaction_type = 'DEBIT' and src_transactionid is not null then 0
+               when transaction_type = 'CREDIT' and trg_transactionid is not null then 0
+          else 1
+          end <> 0 )
+/
+
+/*
+alter table account_transactions
+  add constraint transaction_cred_from_chk
+  check ( case when transaction_type = 'CREDIT' and trg_transactionid is not null then 0
+          else 1
+          end <> 0 )
+/
+*/
