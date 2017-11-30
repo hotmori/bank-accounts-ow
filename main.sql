@@ -14,7 +14,8 @@ set instance &&v_instance
 spool main_&&v_instance._&&v_schema..log
 
 connect system
-@main/create_schema.sql
+@main/ddl_dml/create_schema.sql
+
 alter session set current_schema = &&v_schema;
 ------- ddl dml section ----------
 @main/ddl_dml/create_tables.sql

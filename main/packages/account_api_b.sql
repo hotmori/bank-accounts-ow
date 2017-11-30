@@ -16,7 +16,7 @@ begin
 
   if p_lock_flg then
 
-    select balance
+    select ac.balance
       into v_balance
       from accounts ac
      where ac.accountid = p_accountid
@@ -24,7 +24,7 @@ begin
 
   else
 
-    select balance
+    select ac.balance
       into v_balance
       from accounts ac
      where ac.accountid = p_accountid;
@@ -100,8 +100,6 @@ begin
   end if;
 end i_assert_rate;
 
--- @p_effective_time is used for test only purposes
---    to generate test data in the past
 function i_withdraw
             ( p_accountid number,
               p_amount number,
@@ -192,22 +190,19 @@ begin
 
 end i_set_ref_transactionid;
 
-function create_account
+procedure create_account
            ( p_accountid number,
              p_display_name nvarchar2 )
-return number
 is
-  v_accountid number := p_accountid;
 begin
 
   insert into accounts( accountid,
                         display_name,
                         balance )
-  values ( v_accountid,
+  values ( p_accountid,
            p_display_name,
            0 );
 
-  return v_accountid;
 exception when dup_val_on_index then
   rollback;
   raise_application_error (-20000, 'Account with this accountid already exists.');
