@@ -1,7 +1,7 @@
 create or replace package body account_api is
 
-AC_DEBIT constant number := 1;
-AC_CREDIT constant number := 2;
+AC_DEBIT constant varchar2(16) := 'DEBIT';
+AC_CREDIT constant varchar2(16) := 'CREDIT';
 
 -- it assumed that default isolation level is set (read_commited)
 -- so serialization is required for account transactions
@@ -61,9 +61,7 @@ function i_create_account_transaction
              p_transaction_type varchar2,
              p_amount number,
              p_result_balance number,
-             p_transaction_time timestamp with local time zone,
-             p_src_transactionid number default null,
-             p_trg_transactionid number default null ) return number
+             p_transaction_time timestamp with local time zone ) return number
 is
   v_transactionid number := account_transactions_seq.nextval;
 begin
@@ -74,16 +72,12 @@ begin
                 transaction_type,
                 amount,
                 result_balance,
-                src_transactionid,
-                trg_transactionid,
                 transaction_time )
   values ( v_transactionid,
            p_accountid,
            p_transaction_type,
            p_amount,
            p_result_balance,
-           p_src_transactionid,
-           p_trg_transactionid,
            p_transaction_time );
 
   return v_transactionid;
@@ -111,7 +105,6 @@ end i_assert_rate;
 function i_withdraw
             ( p_accountid number,
               p_amount number,
-              p_trg_transactionid number,
               p_lock_flg boolean,
               p_do_commit boolean,
               p_effective_time timestamp with local time zone )
@@ -124,7 +117,7 @@ is
   v_transactionid number;
 begin
 
-  i_assert_amount ( p_amount < 0 );
+  i_assert_amount ( p_amount > 0 );
 
   v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
 
@@ -138,7 +131,6 @@ begin
                        ( p_accountid => p_accountid,
                          p_transaction_type => AC_DEBIT,
                          p_amount => -p_amount,
-                         p_trg_transactionid => p_trg_transactionid,
                          p_result_balance => v_result_balance,
                          p_transaction_time => v_effective_time );
 
@@ -153,7 +145,6 @@ end i_withdraw;
 function i_deposit
             ( p_accountid number,
               p_amount number,
-              p_src_transactionid number,
               p_lock_flg boolean,
               p_do_commit boolean,
               p_effective_time timestamp with local time zone )
@@ -176,7 +167,6 @@ begin
                        ( p_accountid => p_accountid,
                          p_transaction_type => AC_CREDIT,
                          p_amount => p_amount,
-                         p_src_transactionid => p_src_transactionid,
                          p_result_balance => v_result_balance,
                          p_transaction_time => v_effective_time );
 
@@ -200,7 +190,7 @@ begin
        , tr.trg_transactionid = p_trg_transactionid
    where tr.account_transactionid = p_transactionid;
 
-end i_set_ref_transactionid; 
+end i_set_ref_transactionid;
 
 function create_account
            ( p_accountid number,
@@ -233,7 +223,6 @@ is
 begin
   v_transactionid := i_withdraw ( p_accountid => p_accountid,
                                   p_amount => p_amount,
-                                  p_trg_transactionid => null,
                                   p_lock_flg => true,
                                   p_do_commit => p_do_commit,
                                   p_effective_time => p_effective_time );
@@ -245,7 +234,6 @@ end withdraw;
 procedure deposit
             ( p_accountid number,
               p_amount number,
-              p_lock_flg boolean default true,
               p_do_commit boolean default false,
               p_effective_time timestamp with local time zone default null )
 is
@@ -253,7 +241,6 @@ is
 begin
   v_transactionid := i_deposit ( p_accountid => p_accountid,
                                  p_amount => p_amount,
-                                 p_src_transactionid => null,
                                  p_lock_flg => true,
                                  p_do_commit => p_do_commit,
                                  p_effective_time => p_effective_time );
@@ -274,12 +261,12 @@ is
   v_ids  number_t;
 
   v_effective_time timestamp with local time zone := nvl( p_effective_time, current_timestamp );
-   
+
   v_src_transactionid number := account_transactions_seq.nextval;
   v_trg_transactionid number := account_transactions_seq.nextval;
 begin
 
-  i_assert_amount ( p_amount );
+  i_assert_amount ( p_amount > 0 );
   -- there is need to lock two accounts simultaneously
   --    avoid deadlock in case of opposit transfer at the same moment
   select ac.accountid
@@ -293,13 +280,13 @@ begin
                                      p_amount => p_amount,
                                      p_lock_flg => false,
                                      p_do_commit => false,
-                                     p_effective_time => v_effective_time );  -- p_trg_accountid => p_trg_accountid
+                                     p_effective_time => v_effective_time );
 
   v_trg_transactionid := i_deposit ( p_accountid => p_trg_accountid,
                                      p_amount => p_amount,
                                      p_lock_flg => false,
                                      p_do_commit => false,
-                                     p_effective_time => v_effective_time ); -- p_src_accountid => p_src_accountid
+                                     p_effective_time => v_effective_time );
 
   -- set cross reference between two transactions
   i_set_ref_transactionid ( p_transactionid => v_src_transactionid,
@@ -307,7 +294,7 @@ begin
 
   i_set_ref_transactionid ( p_transactionid => v_trg_transactionid,
                             p_src_transactionid => v_src_transactionid );
-   
+
   i_commit ( p_commit );
 
 exception when others then

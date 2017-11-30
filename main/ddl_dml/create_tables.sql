@@ -39,6 +39,10 @@ comment on table transaction_types is 'Dictionary table.'
 -----------------------------
 -- primary key and indexes --
 -----------------------------
+alter table transaction_types
+  add constraint transaction_types_pk primary key ( transaction_type )
+  using index
+/
 create unique index transaction_types_uk on transaction_types ( upper (transaction_type) )
 /
 -- ==================== TABLE account_transactions ==================== --
@@ -72,12 +76,23 @@ alter table account_transactions
 /
 create index account_transaction_act_idx on account_transactions ( accountid, transaction_type )
 /
+------------------
+-- foreign keys --
+------------------
+alter table account_transactions
+  add constraint account_tr_fk foreign key ( accountid )
+  references accounts ( accountid )
+/
+alter table account_transactions
+  add constraint account_tr_type_fk foreign key ( transaction_type )
+  references transaction_types ( transaction_type )
+/
 -----------------------
 -- check constraints --
 -----------------------
 alter table account_transactions
   add constraint account_transaction_am_chk
-  check ( amount > 0 )
+  check ( (transaction_type = 'CREDIT' and amount > 0) or (transaction_type = 'DEBIT' and amount < 0) )
 /
 
 alter table account_transactions
