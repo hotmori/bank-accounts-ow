@@ -90,18 +90,18 @@ begin
 
 end i_create_account_transaction;
 
-procedure i_assert_amount ( p_amount number )
+procedure i_assert_amount ( p_result boolean )
 is
 begin
-  if nvl ( p_amount, 0 ) < 0 then
+  if not p_result then
     raise_application_error (-20000, 'Invalid amount value.');
   end if;
 end i_assert_amount;
 
-procedure i_assert_rate ( p_rate number )
+procedure i_assert_rate ( p_result boolean )
 is
 begin
-  if nvl ( p_rate, 0 ) < 0 then
+  if not p_result then
     raise_application_error (-20000, 'Invalid amount value.');
   end if;
 end i_assert_rate;
@@ -124,7 +124,7 @@ is
   v_transactionid number;
 begin
 
-  i_assert_amount ( p_amount );
+  i_assert_amount ( p_amount < 0 );
 
   v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
 
@@ -137,7 +137,7 @@ begin
   v_transactionid := i_create_account_transaction
                        ( p_accountid => p_accountid,
                          p_transaction_type => AC_DEBIT,
-                         p_amount => p_amount,
+                         p_amount => -p_amount,
                          p_trg_transactionid => p_trg_transactionid,
                          p_result_balance => v_result_balance,
                          p_transaction_time => v_effective_time );
@@ -166,7 +166,7 @@ is
   v_transactionid number;
 begin
 
-  i_assert_amount ( p_amount );
+  i_assert_amount ( p_amount > 0 );
 
   v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
 
