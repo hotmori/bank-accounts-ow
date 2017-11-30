@@ -7,10 +7,12 @@ select ac.accountid,
 /
 
 -- current balance v2
-select tr.accountid,
-       sum(tr.amount) current_balance
-  from account_transactions tr
- where tr.accountid in ( 1010, 2020, 3030 )
- group by tr.accountid
- order by tr.accountid
+select ac.accountid,
+       sum( nvl(tr.amount,0) ) current_balance
+  from accounts ac
+  left join account_transactions tr
+    on tr.accountid = ac.accountid
+ where ac.accountid in ( 1010, 2020, 3030 )
+ group by ac.accountid
+ order by ac.accountid
 /
