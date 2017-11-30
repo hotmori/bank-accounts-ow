@@ -237,6 +237,9 @@ begin
                                   p_lock_flg => true,
                                   p_do_commit => p_do_commit,
                                   p_effective_time => p_effective_time );
+exception when others then
+  rollback;
+  raise;
 end withdraw;
 
 procedure deposit
@@ -254,6 +257,9 @@ begin
                                  p_lock_flg => true,
                                  p_do_commit => p_do_commit,
                                  p_effective_time => p_effective_time );
+exception when others then
+  rollback;
+  raise;
 end deposit;
 
 procedure transfer
@@ -304,6 +310,9 @@ begin
    
   i_commit ( p_commit );
 
+exception when others then
+  rollback;
+  raise;
 end transfer;
 
 function calc_earned_percents
