@@ -108,14 +108,14 @@ end i_assert_rate;
 
 -- @p_effective_time is used for test only purposes
 --    to generate test data in the past
-procedure i_withdraw
+function i_withdraw
             ( p_accountid number,
               p_amount number,
               p_trg_transactionid number,
               p_lock_flg boolean,
               p_do_commit boolean,
-              p_effective_time timestamp with local time zone,
-              pio_transactionid in out number )
+              p_effective_time timestamp with local time zone )
+return number
 is
   v_current_balance number;
   v_result_balance number;
@@ -147,6 +147,7 @@ begin
 
   i_commit ( p_do_commit );
 
+  return v_transactionid;
 end i_withdraw;
 
 function i_deposit
@@ -187,6 +188,19 @@ begin
   return v_transactionid;
 
 end i_deposit;
+
+procedure i_set_ref_transactionid (p_transactionid number,
+                                   p_src_transactionid number default null,
+                                   p_trg_transactionid number default null)
+is
+begin
+
+  update account_transactions tr
+     set tr.src_transactionid = p_src_transactionid
+       , tr.trg_transactionid = p_trg_transactionid
+   where tr.account_transactionid = p_transactionid;
+
+end i_set_ref_transactionid; 
 
 function create_account
            ( p_accountid number,
@@ -269,18 +283,25 @@ begin
    order by ac.accountid
      for update of ac.accountid;
 
-  i_withdraw ( p_accountid => p_src_accountid,
-               p_amount => p_amount,
-               p_lock_flg => false,
-               p_do_commit => false,
-               p_effective_time => v_effective_time );  -- p_trg_accountid => p_trg_accountid
+  v_src_transactionid:= i_withdraw ( p_accountid => p_src_accountid,
+                                     p_amount => p_amount,
+                                     p_lock_flg => false,
+                                     p_do_commit => false,
+                                     p_effective_time => v_effective_time );  -- p_trg_accountid => p_trg_accountid
 
-  deposit ( p_accountid => p_trg_accountid,
-            p_amount => p_amount,
-            p_lock_flg => false,
-            p_do_commit => false,
-            p_effective_time => v_effective_time ); -- p_src_accountid => p_src_accountid
+  v_trg_transactionid := i_deposit ( p_accountid => p_trg_accountid,
+                                     p_amount => p_amount,
+                                     p_lock_flg => false,
+                                     p_do_commit => false,
+                                     p_effective_time => v_effective_time ); -- p_src_accountid => p_src_accountid
 
+  -- set cross reference between two transactions
+  i_set_ref_transactionid ( p_transactionid => v_src_transactionid,
+                            p_trg_transactionid => v_trg_transactionid );
+
+  i_set_ref_transactionid ( p_transactionid => v_trg_transactionid,
+                            p_src_transactionid => v_src_transactionid );
+   
   i_commit ( p_commit );
 
 end transfer;

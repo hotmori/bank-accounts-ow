@@ -59,9 +59,9 @@ comment on column account_transactions.amount is 'Amount of that was involved in
 /
 comment on column account_transactions.result_balance is 'Result balance on account after the transaction.'
 /
-comment on column account_transactions.src_transactionid is 'Source transactionid if transaction was credit (transfer from another account).'
+comment on column account_transactions.src_transactionid is 'Source transactionid if transaction was credit (transfer from another account). No FK for simplicity.'
 /
-comment on column account_transactions.trg_transactionid is 'Target transactionid if transaction was debit (transfer to another account).'
+comment on column account_transactions.trg_transactionid is 'Target transactionid if transaction was debit (transfer to another account). No FK for simplicity.'
 /
 -----------------------------
 -- primary key and indexes --
