@@ -8,79 +8,83 @@
 -- earned percents v2
 with
 prm as (select to_timestamp_tz('2017/02/01 09:05:00', 'YYYY/MM/DD HH:MI:SS') time_from
-             , to_timestamp_tz('2017/03/10 09:05:00', 'YYYY/MM/DD HH:MI:SS') time_to
+             , to_timestamp_tz('2017/11/05 07:55:00', 'YYYY/MM/DD HH:MI:SS') time_to
           from dual ),
 w1 as
-( -- for every transaction calc business day and previous business day
+( -- for every transaction calculate business day start
+  -- for lower bound of period calculate business day start
+  -- for upper bound of period calculate business day start
  select tr.accountid
        ,tr.amount
        ,tr.transaction_time
        ,sum(tr.amount) over(partition by tr.accountid order by tr.transaction_time range unbounded preceding) calculated_balance
        ,account_api.normalize_to_bs_day_start ( tr.transaction_time ) effective_bday_start
        ,account_api.normalize_to_bs_day_start ( prm.time_from ) effective_time_from
-       ,account_api.normalize_to_bs_day_start ( prm.time_to ) + numtodsinterval(1, 'day') effective_time_to -- excluding
+       ,account_api.normalize_to_bs_day_start ( prm.time_to ) effective_time_to
    from account_transactions tr
    join prm on 1=1
   where tr.accountid = 1010
   order by tr.transaction_time),
 w2 as (
--- catch every transaction in appropriate business day
-select w1.*
-  from w1),
-w3 as (
+-- calculate effective balance business day start
+-- calculate effective balance value
 select distinct
-       w2.accountid
-      ,w2.effective_bday_start + numtodsinterval(24,'hour') effective_balance_from
-      ,last_value(w2.calculated_balance)
-       over(partition by w2.accountid, w2.effective_bday_start) effective_balance
-      ,w2.effective_time_from
-      ,w2.effective_time_to
+       w1.accountid
+      ,w1.effective_bday_start + numtodsinterval(1, 'day') effective_balance_from
+      ,last_value(w1.calculated_balance)
+       over(partition by w1.accountid, w1.effective_bday_start) effective_balance
+      ,w1.effective_time_from
+      ,w1.effective_time_to
+  from w1
+),
+w3 as
+(
+-- catch when effective balance was changed
+select w2.accountid,
+       w2.effective_balance,
+       w2.effective_balance_from,
+       lead(w2.effective_balance_from, 1, current_timestamp)
+       over(partition by w2.accountid order by w2.effective_balance_from  ) effective_balance_to, -- excluding
+       w2.effective_time_from,
+       w2.effective_time_to
   from w2
 ),
 w4 as
-(
+( -- calculate days between crossed given period and effective balance periods
 select w3.accountid,
        w3.effective_balance,
        w3.effective_balance_from,
-       lead(w3.effective_balance_from, 1, current_timestamp)
-       over(partition by w3.accountid order by w3.effective_balance_from  ) effective_balance_to, -- excluding
+       w3.effective_balance_to,
        w3.effective_time_from,
-       w3.effective_time_to
+       w3.effective_time_to,
+       greatest (w3.effective_balance_from, w3.effective_time_from) cross_effective_balance_from,
+       least (w3.effective_balance_to, w3.effective_time_to) cross_effective_balance_to
+     , account_api.to_days (  least (w3.effective_balance_to, w3.effective_time_to)
+                             -  greatest (w3.effective_balance_from, w3.effective_time_from) )
+        xdays_in_period
+     , add_months ( cast( w3.effective_balance_from as date ), 12 ) - cast ( w3.effective_balance_from as date ) days_in_year_for_period
   from w3
-),
-w5 as
-(select w4.accountid,
+  join prm on 1=1
+order by w3.effective_balance_from),
+wfinal as (
+select w4.accountid,
        w4.effective_balance,
        w4.effective_balance_from,
        w4.effective_balance_to,
-       w4.effective_time_from,
-       w4.effective_time_to,
-       greatest (w4.effective_balance_from,w4.effective_time_from) cross_effective_balance_from,
-       least (w4.effective_balance_to,w4.effective_time_to) cross_effective_balance_to
-     ,-- account_api.to_days ( least (w4.effective_balance_to,prm.time_to + numtodsinterval (24, 'hour') )
-       --                      - greatest (w4.effective_balance_from,prm.time_from ) )
-       null xdays_in_period
+       w4.cross_effective_balance_from,
+       w4.cross_effective_balance_to,
+       w4.xdays_in_period,
+       w4.days_in_year_for_period
   from w4
-  join prm on 1=1
-order by w4.effective_balance_from),
-wfinal as (
-select w5.accountid,
-       w5.effective_balance,
-       w5.effective_balance_from,
-       w5.effective_balance_to,
-       w5.cross_effective_balance_from,
-       w5.cross_effective_balance_to,
-       w5.xdays_in_period
-  from w5
  where 1=1 
-   and w5.cross_effective_balance_from >= w5.effective_balance_from
-   and w5.cross_effective_balance_from <= w5.cross_effective_balance_to
-order by w5.effective_balance_from )
+   and xdays_in_period > 0
+order by w4.effective_balance_from
+ )
 select *
-  from w5
+  from wfinal
 order by
-  --transaction_time -- w2
- effective_balance_from -- w3
+  --transaction_time -- w1
+ effective_balance_from -- w2
 /
 
 /*
