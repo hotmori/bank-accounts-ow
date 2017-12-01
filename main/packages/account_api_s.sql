@@ -1,5 +1,15 @@
 create or replace package account_api is
 
+
+DAY_HOUR_OFFSET constant number := 8;
+
+function to_days
+           ( itvl in dsinterval_unconstrained ) return number;
+
+function normalize_to_bs_day_start
+           ( p_timestamp timestamp with local time zone,
+             p_hour_offset number default DAY_HOUR_OFFSET ) return timestamp with local time zone;
+
 procedure create_account
            ( p_accountid number,
              p_display_name nvarchar2 );

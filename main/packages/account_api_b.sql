@@ -1,7 +1,32 @@
 create or replace package body account_api is
 
-AC_DEBIT constant varchar2(16) := 'DEBIT';
-AC_CREDIT constant varchar2(16) := 'CREDIT';
+TR_DEBIT constant varchar2(16) := 'DEBIT';
+TR_CREDIT constant varchar2(16) := 'CREDIT';
+
+
+function to_days
+          ( itvl in dsinterval_unconstrained ) return number
+is
+begin
+  return round (extract( day from itvl )
+                + extract( hour from itvl )/24
+                + extract( minute from itvl )/1440
+                + extract( second from itvl )/86400 );
+end to_days;
+
+function normalize_to_bs_day_start
+           ( p_timestamp timestamp with local time zone,
+             p_hour_offset number default DAY_HOUR_OFFSET ) return timestamp with local time zone
+is
+  v_bday timestamp with local time zone := cast ( trunc ( p_timestamp ) as timestamp ) at local
+                                             + numtodsinterval(DAY_HOUR_OFFSET, 'hour');
+  v_bday_prev timestamp with local time zone := v_bday - numtodsinterval(1, 'day'); 
+begin
+  return case when p_timestamp >= v_bday
+              then v_bday 
+              else v_bday_prev
+         end;
+end normalize_to_bs_day_start;
 
 -- it assumed that default isolation level is set (read_commited)
 -- so serialization is required for account transactions
@@ -127,7 +152,7 @@ begin
 
   v_transactionid := i_create_account_transaction
                        ( p_accountid => p_accountid,
-                         p_transaction_type => AC_DEBIT,
+                         p_transaction_type => TR_DEBIT,
                          p_amount => -p_amount,
                          p_result_balance => v_result_balance,
                          p_transaction_time => v_effective_time );
@@ -163,7 +188,7 @@ begin
 
   v_transactionid := i_create_account_transaction
                        ( p_accountid => p_accountid,
-                         p_transaction_type => AC_CREDIT,
+                         p_transaction_type => TR_CREDIT,
                          p_amount => p_amount,
                          p_result_balance => v_result_balance,
                          p_transaction_time => v_effective_time );
