@@ -19,11 +19,11 @@ function normalize_to_bs_day_start
              p_hour_offset number default DAY_HOUR_OFFSET ) return timestamp with local time zone
 is
   v_bday timestamp with local time zone := cast ( trunc ( p_timestamp ) as timestamp ) at local
-                                             + numtodsinterval(DAY_HOUR_OFFSET, 'hour');
-  v_bday_prev timestamp with local time zone := v_bday - numtodsinterval(1, 'day'); 
+                                             + numtodsinterval(p_hour_offset, 'hour');
+  v_bday_prev timestamp with local time zone := v_bday - numtodsinterval(1, 'day');
 begin
   return case when p_timestamp >= v_bday
-              then v_bday 
+              then v_bday
               else v_bday_prev
          end;
 end normalize_to_bs_day_start;
@@ -124,6 +124,14 @@ begin
     raise_application_error (-20000, 'Invalid amount value.');
   end if;
 end i_assert_rate;
+
+procedure i_assert_period ( p_result boolean )
+is
+begin
+  if not p_result then
+    raise_application_error (-20000, 'Invalid period.');
+  end if;
+end i_assert_period;
 
 function i_withdraw
             ( p_accountid number,
@@ -326,13 +334,68 @@ function calc_earned_percents
            ( p_accountid number,
              p_time_from timestamp with local time zone,
              p_time_to timestamp with local time zone,
-             p_interest_rate number )
-return number
+             p_interest_rate number ) return number
 is
+
+  v_result number := 0;
+  v_effective_time_from timestamp with local time zone;
+  v_effective_time_to timestamp with local time zone;
+
 begin
-  null;
+
+  v_effective_time_from := normalize_to_bs_day_start ( p_time_from );
+  v_effective_time_to := normalize_to_bs_day_start ( p_time_to );
+  i_assert_period ( v_effective_time_from < v_effective_time_to );
+
+  with
+  w1 as (
+   -- for every transaction calculate business day start
+   -- for lower bound of period calculate business day start
+   -- for upper bound of period calculate business day start
+   select tr.amount
+         ,tr.transaction_time
+         ,sum(tr.amount) over(partition by tr.accountid order by tr.accountid, tr.transaction_time range unbounded preceding) calculated_balance
+         ,account_api.normalize_to_bs_day_start ( tr.transaction_time ) effective_bday_start
+         ,account_api.normalize_to_bs_day_start ( tr.transaction_time ) + numtodsinterval(1,'day') effective_balance_from
+         ,v_effective_time_from effective_time_from
+         ,v_effective_time_to effective_time_to
+     from account_transactions tr
+    where tr.accountid = p_accountid ),
+  w2 as (
+  -- calculate effective balance value
+  select distinct
+         w1.effective_balance_from
+        ,last_value(w1.calculated_balance)
+         over(partition by w1.effective_bday_start) effective_balance_value
+        ,w1.effective_time_from
+        ,w1.effective_time_to
+    from w1 ),
+  w3 as (
+  -- catch when effective balance was changed
+  select w2.effective_balance_value
+        ,w2.effective_balance_from
+        ,lead(w2.effective_balance_from, 1, w2.effective_time_to )
+         over( order by w2.effective_balance_from  ) effective_balance_to -- excluding
+        ,w2.effective_time_from
+        ,w2.effective_time_to
+    from w2 ),
+  w4 as (
+  -- calculate days between crossed given period and effective balance periods
+  select w3.effective_balance_value
+        ,account_api.to_days (  least (w3.effective_balance_to, w3.effective_time_to)
+                               -  greatest (w3.effective_balance_from, w3.effective_time_from) ) days_in_period
+        ,add_months ( cast( w3.effective_balance_from as date ), 12 )
+         - cast ( w3.effective_balance_from as date ) days_in_year_for_period
+    from w3 )
+  -- round values before sum
+  select sum( round( w4.effective_balance_value * p_interest_rate * w4.days_in_period / w4.days_in_year_for_period, 2 ) )
+    into v_result
+    from w4
+   where w4.days_in_period > 0;
+
+  return v_result;
+
 end calc_earned_percents;
 
-/**/
 end account_api;
 /

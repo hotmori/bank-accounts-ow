@@ -39,5 +39,13 @@ procedure transfer
               p_commit boolean default false,
               p_effective_time timestamp with local time zone default null );
 
+-- p_time_to can be set to future
+--   last effective balance will be taken in that case
+function calc_earned_percents
+           ( p_accountid number,
+             p_time_from timestamp with local time zone,
+             p_time_to timestamp with local time zone,
+             p_interest_rate number ) return number;
+
 end;
 /
