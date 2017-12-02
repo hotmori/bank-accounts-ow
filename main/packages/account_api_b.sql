@@ -3,6 +3,9 @@ create or replace package body account_api is
 TR_DEBIT constant varchar2(16) := 'DEBIT';
 TR_CREDIT constant varchar2(16) := 'CREDIT';
 
+ERR_INVALID_AMOUNT constant varchar2(64) := 'Invalid amount value.';
+ERR_INVALID_PERIOD constant varchar2(64) := 'Invalid period. At least one day should be in between.';
+ERR_INSUFFICIENT_BALANCE constant varchar2(64) := 'Insufficient balance.';
 
 function to_days
           ( itvl in dsinterval_unconstrained ) return number
@@ -85,7 +88,6 @@ function i_create_account_transaction
            ( p_accountid number,
              p_transaction_type varchar2,
              p_amount number,
-             p_result_balance number,
              p_transaction_time timestamp with local time zone ) return number
 is
   v_transactionid number := account_transactions_seq.nextval;
@@ -96,42 +98,26 @@ begin
                 accountid,
                 transaction_type,
                 amount,
-                result_balance,
                 transaction_time )
   values ( v_transactionid,
            p_accountid,
            p_transaction_type,
            p_amount,
-           p_result_balance,
            p_transaction_time );
 
   return v_transactionid;
 
 end i_create_account_transaction;
 
-procedure i_assert_amount ( p_result boolean )
+procedure i_assert 
+            ( p_result boolean,
+              p_msg varchar2 )
 is
 begin
   if not p_result then
-    raise_application_error (-20000, 'Invalid amount value.');
+    raise_application_error (-20000, 'Assert failed: ' || p_msg );
   end if;
-end i_assert_amount;
-
-procedure i_assert_rate ( p_result boolean )
-is
-begin
-  if not p_result then
-    raise_application_error (-20000, 'Invalid amount value.');
-  end if;
-end i_assert_rate;
-
-procedure i_assert_period ( p_result boolean )
-is
-begin
-  if not p_result then
-    raise_application_error (-20000, 'Invalid period.');
-  end if;
-end i_assert_period;
+end i_assert;
 
 function i_withdraw
             ( p_accountid number,
@@ -148,13 +134,11 @@ is
   v_transactionid number;
 begin
 
-  i_assert_amount ( p_amount > 0 );
+  i_assert ( p_amount > 0, ERR_INVALID_AMOUNT );
 
   v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
 
-  if p_amount > v_current_balance then
-    raise_application_error (-20000, 'Insufficient balance.');
-  end if;
+  i_assert ( p_amount > v_current_balance, ERR_INSUFFICIENT_BALANCE );
 
   v_result_balance := v_current_balance - p_amount;
 
@@ -162,7 +146,6 @@ begin
                        ( p_accountid => p_accountid,
                          p_transaction_type => TR_DEBIT,
                          p_amount => -p_amount,
-                         p_result_balance => v_result_balance,
                          p_transaction_time => v_effective_time );
 
   i_adjust_balance ( p_accountid => p_accountid,
@@ -188,7 +171,7 @@ is
   v_transactionid number;
 begin
 
-  i_assert_amount ( p_amount > 0 );
+  i_assert ( p_amount > 0, ERR_INVALID_AMOUNT );
 
   v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
 
@@ -198,7 +181,6 @@ begin
                        ( p_accountid => p_accountid,
                          p_transaction_type => TR_CREDIT,
                          p_amount => p_amount,
-                         p_result_balance => v_result_balance,
                          p_transaction_time => v_effective_time );
 
   i_adjust_balance ( p_accountid => p_accountid,
@@ -294,7 +276,7 @@ is
   v_trg_transactionid number := account_transactions_seq.nextval;
 begin
 
-  i_assert_amount ( p_amount > 0 );
+  i_assert ( p_amount > 0, ERR_INVALID_AMOUNT );
   -- there is need to lock two accounts simultaneously
   --    avoid deadlock in case of opposit transfer at the same moment
   select ac.accountid
@@ -345,7 +327,7 @@ begin
 
   v_effective_time_from := normalize_to_bs_day_start ( p_time_from );
   v_effective_time_to := normalize_to_bs_day_start ( p_time_to );
-  i_assert_period ( v_effective_time_from < v_effective_time_to );
+  i_assert ( v_effective_time_from < v_effective_time_to, ERR_INVALID_PERIOD );
 
   with
   w1 as (
@@ -387,8 +369,9 @@ begin
         ,add_months ( cast( w3.effective_balance_from as date ), 12 )
          - cast ( w3.effective_balance_from as date ) days_in_year_for_period
     from w3 )
-  -- round values before sum
-  select sum( round( w4.effective_balance_value * p_interest_rate * w4.days_in_period / w4.days_in_year_for_period, 2 ) )
+  -- round values before aggregating
+  select nvl( sum( round( w4.effective_balance_value * p_interest_rate * w4.days_in_period /
+                          w4.days_in_year_for_period, 2 ) ), 0 )
     into v_result
     from w4
    where w4.days_in_period > 0;

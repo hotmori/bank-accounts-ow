@@ -51,7 +51,6 @@ create table account_transactions
                  accountid number not null,
                  transaction_type varchar2(16) not null,
                  amount number,
-                 result_balance number,
                  src_transactionid number,
                  trg_transactionid number,
                  transaction_time timestamp with local time zone not null
@@ -59,9 +58,7 @@ create table account_transactions
 /
 comment on table account_transactions is 'Stores all transactions against account.'
 /
-comment on column account_transactions.amount is 'Amount of that was involved in transaction. Strictly greater than zero.'
-/
-comment on column account_transactions.result_balance is 'Result balance on account after the transaction.'
+comment on column account_transactions.amount is 'Positive for credit, negative for debit.'
 /
 comment on column account_transactions.src_transactionid is 'Source transactionid if transaction was credit (transfer from another account). No FK for simplicity.'
 /

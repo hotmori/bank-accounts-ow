@@ -27,6 +27,10 @@ alter session set current_schema = &&v_schema;
 
 ------- extra ddl dml section ----------
 @main/ddl_dml/create_test_data.sql
+@main/queries/01_current_balance.sql
+@main/queries/02_balance_given_time.sql
+@main/queries/03_debit_credit_in_period.sql
+@main/queries/04_earned_percents.sql
 
 /********************************/
 
