@@ -138,7 +138,7 @@ begin
 
   v_current_balance := i_get_account_balance ( p_accountid, p_lock_flg );
 
-  i_assert ( p_amount > v_current_balance, ERR_INSUFFICIENT_BALANCE );
+  i_assert ( p_amount <= v_current_balance, ERR_INSUFFICIENT_BALANCE );
 
   v_result_balance := v_current_balance - p_amount;
 

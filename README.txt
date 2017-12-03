@@ -13,7 +13,7 @@ Deployment instruction
 1. Execute sqlplus /nolog @main.sql <db_tns_name> <test_schema_name> (for example "sqlplus /nolog @main.sql ora_db1 dmitryi_test")
    and enter SYSTEM password after the prompt.
 
-2. Check logfile main_<db_tns_name>_<test_schema_name>.log for errors.
+2. Check logfile main_<db_tns_name>_<test_schema_name>.log for errors (ora-|pls-|sp2-).
 
 
 Rollback instruction
@@ -21,4 +21,4 @@ Rollback instruction
 1. Execute sqlplus /nolog @rback.sql <db_tns_name> <test_schema_name> (for example "sqlplus /nolog @rback.sql ora_db1 dmitryi_test")
    and enter SYSTEM password after the prompt.
 
-2. Check logfile rback_<db_tns_name>_<test_schema_name>.log for errors.
+2. Check logfile rback_<db_tns_name>_<test_schema_name>.log for errors (ora-|pls-|sp2-).
